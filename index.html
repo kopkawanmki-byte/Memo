@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Memo Internal - Mobile Friendly</title>
+    <!-- Tailwind CSS untuk Styling Cepat -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Pengaturan Khusus untuk Mode Cetak (Print) */
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white; padding: 0; margin: 0; }
+            .print-container { 
+                box-shadow: none !important; 
+                margin: 0 !important; 
+                padding: 0 !important;
+                width: 100% !important;
+            }
+            .memo-page {
+                border: none !important;
+                box-shadow: none !important;
+                padding: 10mm 15mm !important;
+                margin: 0 !important;
+                width: 100% !important;
+                min-height: auto !important;
+            }
+        }
+
+        /* Standar Ukuran Kertas A4 (Hanya untuk Desktop Preview) */
+        @media (min-width: 1024px) {
+            .memo-page {
+                min-height: 297mm;
+                width: 210mm;
+            }
+        }
+
+        .memo-page {
+            background: white;
+            margin: auto;
+            padding: 1rem; /* Padding lebih kecil di HP */
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            border: 1px solid #d1d5db;
+            font-family: 'Times New Roman', Times, serif;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+
+        @media (min-width: 640px) {
+            .memo-page { padding: 20mm; }
+        }
+
+        /* Kotak Tanda Tangan Kecil di Preview */
+        .signature-box-mini {
+            border: 1px dashed #ccc;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fafafa;
+            margin: 5px 0;
+            overflow: hidden;
+        }
+
+        /* Modal Overlay Tanda Tangan */
+        #signature-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 1rem;
+        }
+
+        /* Mencegah scroll saat menggambar di HP */
+        .stop-scrolling {
+            height: 100%;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen p-2 md:p-4">
+
+    <!-- Modal Tanda Tangan -->
+    <div id="signature-modal" class="no-print">
+        <div class="bg-white p-4 md:p-6 rounded-xl shadow-2xl max-w-md w-full">
+            <h3 class="text-lg font-bold mb-4">Bubuhkan Tanda Tangan</h3>
+            <div class="border-2 border-gray-200 rounded-lg bg-gray-50 overflow-hidden h-64 md:h-48 touch-none">
+                <canvas id="main-canvas" class="w-full h-full cursor-crosshair"></canvas>
+            </div>
+            <div class="flex justify-between mt-6">
+                <button onclick="closeModal()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium">Batal</button>
+                <div class="flex gap-2">
+                    <button onclick="clearCanvas()" class="px-4 py-2 bg-red-100 text-red-600 rounded-lg font-medium">Hapus</button>
+                    <button onclick="saveSignature()" class="px-5 py-2 bg-indigo-600 text-white rounded-lg font-bold shadow-md">Simpan</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Panel Editor (No-Print) -->
+        <div class="lg:col-span-4 no-print order-2 lg:order-1">
+            <div class="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-200 lg:h-[92vh] lg:overflow-y-auto">
+                <h2 class="text-xl font-bold mb-4 text-slate-800 border-b pb-2 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    Editor Memo
+                </h2>
+                
+                <div class="space-y-4">
+                    <!-- Judul Utama -->
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Judul Dokumen</label>
+                        <input type="text" id="in-doc-title" class="w-full border border-gray-300 rounded-lg p-2 text-sm font-bold bg-amber-50 focus:ring-2 focus:ring-amber-200 outline-none" value="INTERNAL MEMO">
+                    </div>
+
+                    <!-- Meta Data Dokumen -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Nomor Memo</label>
+                            <input type="text" id="in-no" class="w-full border rounded-lg p-2 text-sm" value="05/OPS/WHFG/V/2025">
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Lampiran</label>
+                            <input type="text" id="in-attachment" class="w-full border rounded-lg p-2 text-sm" value="1 Lembar">
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Kepada Yth</label>
+                        <input type="text" id="in-to" class="w-full border rounded-lg p-2 text-sm" placeholder="Nama Penerima">
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Perihal</label>
+                        <input type="text" id="in-subject" class="w-full border rounded-lg p-2 text-sm font-bold" placeholder="Perihal Dokumen">
+                    </div>
+
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Tanggal</label>
+                        <input type="date" id="in-date" class="w-full border rounded-lg p-2 text-sm">
+                    </div>
+
+                    <!-- Area Pesan Utama -->
+                    <div>
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Isi Memo</label>
+                        <textarea id="in-body" rows="6" class="w-full border rounded-lg p-2 text-sm leading-relaxed" placeholder="Tulis isi pesan di sini..."></textarea>
+                    </div>
+
+                    <!-- Kontrol Persetujuan -->
+                    <div class="pt-4 border-t">
+                        <div class="flex justify-between items-center mb-3">
+                            <label class="text-xs font-bold text-gray-500 uppercase tracking-widest">Persetujuan Digital</label>
+                            <button onclick="addApproval()" class="bg-emerald-600 text-white text-[11px] px-3 py-1.5 rounded-lg hover:bg-emerald-700 font-bold shadow-sm">+ Tambah</button>
+                        </div>
+                        <div id="approval-list" class="space-y-3">
+                            <!-- Items dimuat JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-8 sticky bottom-0 bg-white pt-4 border-t lg:static lg:border-none">
+                    <button onclick="window.print()" class="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2 shadow-lg shadow-indigo-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"></path><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                        Cetak / Simpan PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Dokumen (Print Container) -->
+        <div class="lg:col-span-8 print-container order-1 lg:order-2 overflow-x-auto">
+            <div id="memo-canvas" class="memo-page relative text-black text-[13px]">
+                
+                <!-- KOP Surat -->
+                <div class="flex items-center gap-3 sm:gap-4 border-b-2 border-black pb-1 mb-6" id="headerSection">
+                    <div class="w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0 flex items-center justify-center overflow-hidden">
+                        <img id="previewLogo" src="https://lh3.googleusercontent.com/d/1GfRYHdZVEnt3WnSLJfmMKzx3HLSctPCh" crossorigin="anonymous" alt="Logo" class="max-w-full max-h-full object-contain" onerror="this.style.display='none'; document.getElementById('placeholderLogo').classList.remove('hidden');">
+                        <div id="placeholderLogo" class="text-gray-300 hidden">
+                            <svg class="w-8 h-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="flex-1 text-center pr-4 sm:pr-8">
+                        <h1 id="previewKopNama" class="text-[10pt] sm:text-[11pt] font-bold uppercase leading-tight mb-1">KOPERASI KONSUMEN KARYAWAN MITRA KIARA INDONESIA</h1>
+                        <p id="previewKopAlamat" class="text-[7pt] sm:text-[8pt] whitespace-pre-line leading-tight">PT Mitra Kiara Indonesia Jl. Raya Narogong KM 7 Kp. Narogong, Kembang Kuning, Klapanunggal, Kab. Bogor, Jawa Barat, 16872 Telp: +6285717050604 | Email: abi@mitrakiaraindonesia.com</p>
+                    </div>
+                </div>
+
+                <!-- Judul -->
+                <div class="text-center mb-6 sm:mb-10 px-2">
+                    <h1 id="view-doc-title" class="text-xl sm:text-2xl font-bold underline underline-offset-8 tracking-[0.1em] sm:tracking-[0.2em]">INTERNAL MEMO</h1>
+                </div>
+
+                <!-- Meta Table -->
+                <div class="mb-6 overflow-x-auto">
+                    <table class="w-full leading-relaxed min-w-[300px]">
+                        <tr><td class="w-20 sm:w-28 py-0.5">Nomor</td><td class="w-4">:</td><td id="view-no"></td></tr>
+                        <tr><td class="py-0.5">Lampiran</td><td>:</td><td id="view-attachment"></td></tr>
+                        <tr><td class="py-0.5">Kepada Yth</td><td>:</td><td id="view-to" class="font-bold"></td></tr>
+                        <tr><td class="py-0.5">Perihal</td><td>:</td><td id="view-subject" class="font-bold underline"></td></tr>
+                        <tr><td class="py-0.5">Tanggal</td><td>:</td><td id="view-date"></td></tr>
+                    </table>
+                </div>
+
+                <!-- Isi -->
+                <div class="flex-grow mt-4">
+                    <p class="mb-4">Dengan hormat,</p>
+                    <div id="view-body" class="whitespace-pre-wrap text-justify leading-relaxed"></div>
+                    <p class="mt-8 text-justify">Demikian memo ini kami sampaikan untuk dapat ditindaklanjuti dan mendapatkan persetujuan. Atas perhatian dan kerjasamanya, kami ucapkan terima kasih.</p>
+                </div>
+
+                <!-- Approval Grid -->
+                <div class="mt-10 overflow-x-auto">
+                    <div id="view-approvals" class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center text-[10px] min-w-[500px] sm:min-w-0">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <div class="mt-8 text-[9px] border-t border-dotted pt-2 opacity-40 italic">
+                    Dokumen ini digenerate melalui Sistem Digital Memo.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let approvals = [
+            { id: 1, role: 'Dibuat Oleh:', name: 'Abi Habudin', title: 'Asst Manager SCM', sign: null },
+            { id: 2, role: 'Diketahui Oleh:', name: 'Agus Adam', title: 'EVP Operation', sign: null },
+            { id: 3, role: 'Disetujui Oleh:', name: 'Wirawan K', title: 'EVP Finance', sign: null },
+            { id: 4, role: 'Disetujui Oleh:', name: 'Rinold Thamrin', title: 'Dir. Keuangan', sign: null }
+        ];
+
+        let activeSignId = null;
+
+        // Init
+        const inDate = document.getElementById('in-date');
+        inDate.valueAsDate = new Date();
+
+        function renderAll() {
+            const ids = ['no', 'attachment', 'to', 'subject', 'body', 'doc-title'];
+            ids.forEach(id => {
+                const inputEl = document.getElementById(`in-${id}`);
+                const viewEl = document.getElementById(`view-${id}`);
+                if (inputEl && viewEl) {
+                    viewEl.innerText = inputEl.value || (id === 'doc-title' ? 'DOKUMEN' : '---');
+                }
+            });
+            
+            const d = new Date(inDate.value);
+            document.getElementById('view-date').innerText = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(d);
+
+            // Editor List
+            const listEl = document.getElementById('approval-list');
+            listEl.innerHTML = '';
+            approvals.forEach((app) => {
+                const div = document.createElement('div');
+                div.className = "p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 relative group";
+                div.innerHTML = `
+                    <button onclick="removeApproval(${app.id})" class="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-sm">&times;</button>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input type="text" value="${app.role}" oninput="updateApp(${app.id}, 'role', this.value)" class="border rounded p-1.5 text-[10px]" placeholder="Status">
+                        <input type="text" value="${app.name}" oninput="updateApp(${app.id}, 'name', this.value)" class="border rounded p-1.5 text-[10px] font-bold" placeholder="Nama">
+                    </div>
+                    <div class="flex gap-2 items-center">
+                        <input type="text" value="${app.title}" oninput="updateApp(${app.id}, 'title', this.value)" class="border rounded p-1.5 text-[10px] flex-grow" placeholder="Jabatan">
+                        <button onclick="openSignModal(${app.id})" class="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold">Sign</button>
+                    </div>
+                `;
+                listEl.appendChild(div);
+            });
+
+            // Preview Grid
+            const viewAppEl = document.getElementById('view-approvals');
+            viewAppEl.innerHTML = '';
+            approvals.forEach(app => {
+                const col = document.createElement('div');
+                col.className = "flex flex-col items-center p-2 border border-gray-100";
+                col.innerHTML = `
+                    <p class="mb-1">${app.role}</p>
+                    <div class="signature-box-mini w-full">
+                        ${app.sign ? `<img src="${app.sign}" class="max-h-full">` : ''}
+                    </div>
+                    <p class="font-bold uppercase underline mt-1 truncate w-full text-center">${app.name || '---'}</p>
+                    <p class="text-[8px] leading-tight truncate w-full text-center">${app.title || ''}</p>
+                `;
+                viewAppEl.appendChild(col);
+            });
+        }
+
+        function updateApp(id, key, val) {
+            const app = approvals.find(a => a.id === id);
+            if(app) app[key] = val;
+            renderAll();
+        }
+
+        function addApproval() {
+            approvals.push({ id: Date.now(), role: 'Disetujui Oleh:', name: '', title: '', sign: null });
+            renderAll();
+        }
+
+        function removeApproval(id) {
+            approvals = approvals.filter(a => a.id !== id);
+            renderAll();
+        }
+
+        // Canvas
+        const canvas = document.getElementById('main-canvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+
+        function openSignModal(id) {
+            activeSignId = id;
+            document.body.classList.add('stop-scrolling');
+            document.getElementById('signature-modal').style.display = 'flex';
+            resizeCanvas();
+        }
+
+        function closeModal() {
+            document.body.classList.remove('stop-scrolling');
+            document.getElementById('signature-modal').style.display = 'none';
+            clearCanvas();
+        }
+
+        function resizeCanvas() {
+            // Memberikan sedikit waktu untuk layout CSS selesai render
+            setTimeout(() => {
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = canvas.parentElement.clientHeight;
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = '#000080';
+            }, 50);
+        }
+
+        function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+        function saveSignature() {
+            const dataUrl = canvas.toDataURL();
+            const app = approvals.find(a => a.id === activeSignId);
+            if(app) app.sign = dataUrl;
+            closeModal();
+            renderAll();
+        }
+
+        // Event Listeners
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+            }
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const pos = getPos(e);
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+            if(e.cancelable) e.preventDefault();
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const pos = getPos(e);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+            if(e.cancelable) e.preventDefault();
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        window.addEventListener('mouseup', stopDrawing);
+
+        canvas.addEventListener('touchstart', startDrawing, {passive: false});
+        canvas.addEventListener('touchmove', draw, {passive: false});
+        canvas.addEventListener('touchend', stopDrawing);
+
+        ['in-no', 'in-attachment', 'in-to', 'in-subject', 'in-body', 'in-date', 'in-doc-title'].forEach(id => {
+            document.getElementById(id).addEventListener('input', renderAll);
+        });
+
+        window.addEventListener('resize', () => { if(activeSignId) resizeCanvas(); });
+
+        renderAll();
+    </script>
+</body>
+</html>
